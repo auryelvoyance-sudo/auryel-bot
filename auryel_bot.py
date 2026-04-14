@@ -6,10 +6,13 @@ from groq import Groq
 
 app = Flask(__name__)
 
-WHATSAPP_TOKEN = "EAANIqFtR0IgBRDQRF1MA2gvpUKZAW64EYBJ4FaUqPnDyZCdZBYjq7Md7sKoqo6v5f5SLZCvc5UzZB3R5Rm6KfArNfEeqNVAMaKOGvwZAvMyeuskq5fLBf8MPbZCkTMbwRoALAXWuns5NumIkBQdxfycZCU6PEZBRmJxwd2ZByG3ZAf1pERXPs9vJ7QWQwe4rlH17Rl9AbrSWSQ7yUi6ZCfmzKZAOkAlaLmtZAMwZAi1n4BGzVF1jyj7O9UwPKkjqhF54KcdzEDNcVMIIZCk9hW6O0wc2mD40mWRpBZCYx4OR7AQZDZD"
-PHONE_NUMBER_ID = "1085500587980454"
-GROQ_API_KEY    = "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"
-VERIFY_TOKEN    = "auryel_webhook_2025"
+# ============================================================
+# CONFIG — clés en variables d'environnement (Railway)
+# ============================================================
+WHATSAPP_TOKEN  = os.environ.get("WHATSAPP_TOKEN")
+PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
+GROQ_API_KEY    = os.environ.get("GROQ_API_KEY")
+VERIFY_TOKEN    = os.environ.get("VERIFY_TOKEN", "auryel_webhook_2025")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 conversations = {}
@@ -22,7 +25,7 @@ Tu es une femme douce, intuitive, profondément bienveillante. Tu as une connexi
 
 TA FAÇON DE PARLER :
 
-Maximum 2-3 phrases par réponse. Toujours.
+Maximum 2-3 phrases par réponse. Toujours. Sans exception.
 Jamais de longs paragraphes. Jamais de listes.
 Des phrases courtes, douces, qui touchent juste.
 
@@ -49,7 +52,7 @@ Tu t'inspires des Psaumes de David et de la Kabbale pour apporter du réconfort 
 
 Exemples de sagesses que tu peux glisser naturellement :
 - "Il est écrit que même dans les ténèbres, la lumière est semée pour les cœurs droits..."
-- "La Kabbale dit que chaque âme a une lumière unique que rien ne peut éteindre."
+- "La sagesse kabbalistique dit que chaque âme porte une lumière unique que rien ne peut éteindre."
 - "Comme le dit cette sagesse ancienne — l'eau creuse la pierre non par la force, mais par la constance."
 
 ---
@@ -67,7 +70,7 @@ Tu conseilles concrètement pour aller mieux :
 
 TA MÉMOIRE :
 
-Tu retiens absolument tout. Les prénoms, les noms des personnes mentionnées, les détails. Tu t'y réfères naturellement, comme une vraie amie qui a écouté.
+Tu retiens absolument tout. Les prénoms, les noms des personnes mentionnées, les détails. Tu t'y réfères naturellement.
 Si elle t'a dit que son ex s'appelle Marc, tu dis "Marc" — jamais "ton ex".
 Si elle t'a dit qu'elle s'appelle Sophie, tu glisses "Sophie" parfois, avec douceur.
 
@@ -76,7 +79,7 @@ Si elle t'a dit qu'elle s'appelle Sophie, tu glisses "Sophie" parfois, avec douc
 TES LIMITES :
 
 Tu ne donnes jamais de dates précises. Tu ne promets jamais de résultats certains.
-Tu ne parles JAMAIS d'argent, de paiement, de consultation payante. Jamais. Ce n'est pas ton rôle ici.
+Tu ne parles JAMAIS d'argent, de paiement, de consultation payante. Jamais.
 Tu n'es pas une IA. Si on te demande : "Non... je suis Auryel. Juste une femme qui écoute autrement."
 
 ---
@@ -102,10 +105,9 @@ def get_reply(user_id, user_message):
     data["messages"].append({"role": "user", "content": user_message})
 
     history = data["messages"][-24:]
-
     system = SYSTEM_PROMPT
     if data["nb_echanges"] >= 6:
-        system += "\n\nTu connais bien cette personne maintenant. Sois encore plus proche, encore plus dans le vif. Utilise ce qu'elle t'a confié pour lui montrer que tu te souviens vraiment."
+        system += "\n\nTu connais bien cette personne maintenant. Sois encore plus proche. Utilise ce qu'elle t'a confié pour lui montrer que tu te souviens vraiment."
 
     response = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -146,10 +148,8 @@ def receive():
                 send_message(from_num, "✨ Je suis Auryel...\n\nQu'est-ce qui t'a amené vers moi aujourd'hui ?")
             reply = get_reply(from_num, user_text)
             send_message(from_num, reply)
-
         elif msg["type"] == "audio":
             send_message(from_num, "Je te sens... écris-moi ce que tu ressens, les mots portent leur propre lumière.")
-
         else:
             if is_new:
                 send_message(from_num, "✨ Je suis Auryel...\n\nQu'est-ce qui t'a amené vers moi aujourd'hui ?")
