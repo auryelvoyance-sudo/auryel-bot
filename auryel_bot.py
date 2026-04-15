@@ -5,10 +5,11 @@ import sqlite3
 import requests
 import threading
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session, redirect, url_for
 from groq import Groq
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "auryel_secret_2026_xK9m")
 
 WHATSAPP_TOKEN  = os.environ.get("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
@@ -632,8 +633,9 @@ def test():
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "auryel2026")
 
 def admin_auth():
-    pwd = request.args.get("pwd") or request.headers.get("X-Admin-Password")
-    return pwd == ADMIN_PASSWORD
+    # Vérifie la session OU le header (pour les appels API)
+    pwd = request.headers.get("X-Admin-Password")
+    return session.get("admin_logged") == True or pwd == ADMIN_PASSWORD
 
 def get_all_users():
     conn = sqlite3.connect(DB_PATH)
@@ -657,28 +659,7 @@ def get_conversation(phone):
 @app.route("/admin", methods=["GET"])
 def admin_dashboard():
     if not admin_auth():
-        return """
-        <html><head><title>Auryel Admin</title>
-        <meta name='viewport' content='width=device-width,initial-scale=1'>
-        <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:Georgia,serif;background:#0a0a0f;color:#e8e0d0;min-height:100vh;display:flex;align-items:center;justify-content:center}
-        .box{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:48px 40px;width:100%;max-width:400px;text-align:center}
-        h1{font-size:28px;color:#d4a843;margin-bottom:8px;letter-spacing:2px}
-        p{color:#8a7a6a;margin-bottom:28px;font-size:14px}
-        input{width:100%;background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.12);border-radius:12px;padding:14px 18px;color:#e8e0d0;font-size:16px;outline:none;margin-bottom:16px;font-family:Georgia,serif}
-        input:focus{border-color:#d4a843}
-        button{width:100%;padding:15px;background:linear-gradient(135deg,#b8860b,#d4a843);border:none;border-radius:12px;color:#0a0a0f;font-size:16px;font-weight:bold;cursor:pointer;letter-spacing:1px}
-        </style></head>
-        <body><div class='box'>
-        <h1>✦ AURYEL</h1>
-        <p>Espace administrateur</p>
-        <form method='get'>
-        <input type='password' name='pwd' placeholder='Mot de passe' autofocus>
-        <button type='submit'>ACCÉDER</button>
-        </form>
-        </div></body></html>
-        """, 401
+        return redirect('/admin/login')
 
     users = get_all_users()
     pwd = request.args.get("pwd", "")
@@ -692,7 +673,7 @@ def admin_dashboard():
         feu = "🔥" if nb_echanges >= 10 else "💬" if nb_echanges >= 5 else "👤"
         pause = "⏸️ PAUSE" if etat == "pause" else "🤖 BOT"
         rows_html += f"""
-        <tr onclick="openConv('{phone}','{pwd}')" style="cursor:pointer">
+        <tr onclick="openConv('{phone}')" style="cursor:pointer">
           <td><span style="font-size:18px">{feu}</span></td>
           <td><strong>{nom_affiche}</strong><br><small style="color:#8a7a6a">{phone}</small></td>
           <td>{guide_nom}</td>
@@ -803,9 +784,9 @@ tr:last-child td{{border-bottom:none}}
 
 <script>
 let currentPhone = '';
-let currentPwd = '{pwd}';
+let currentPwd = '';
 
-async function openConv(phone, pwd) {{
+async function openConv(phone) {{
   currentPhone = phone;
   document.getElementById('modal').classList.add('open');
   const res = await fetch(`/admin/conversation?phone=${{phone}}&pwd=${{pwd}}`);
@@ -865,7 +846,7 @@ document.getElementById('sendInput').addEventListener('keydown', function(e) {{
 
 @app.route("/admin/conversation", methods=["GET"])
 def admin_conversation():
-    if not admin_auth():
+    if not session.get("admin_logged"):
         return jsonify({"error": "unauthorized"}), 401
     phone = request.args.get("phone", "")
     user = get_user(phone)
@@ -877,7 +858,7 @@ def admin_conversation():
 
 @app.route("/admin/pause", methods=["POST"])
 def admin_pause():
-    if not admin_auth():
+    if not session.get("admin_logged"):
         return jsonify({"error": "unauthorized"}), 401
     phone = request.args.get("phone", "")
     update_user(phone, etat="pause")
@@ -885,7 +866,7 @@ def admin_pause():
 
 @app.route("/admin/resume", methods=["POST"])
 def admin_resume():
-    if not admin_auth():
+    if not session.get("admin_logged"):
         return jsonify({"error": "unauthorized"}), 401
     phone = request.args.get("phone", "")
     update_user(phone, etat="normal")
@@ -893,11 +874,9 @@ def admin_resume():
 
 @app.route("/admin/send", methods=["POST"])
 def admin_send():
-    if not admin_auth():
+    if not session.get("admin_logged"):
         return jsonify({"error": "unauthorized"}), 401
     data = request.get_json()
-    if data.get("pwd") != ADMIN_PASSWORD:
-        return jsonify({"error": "unauthorized"}), 401
     phone = data.get("phone", "")
     message = data.get("message", "")
     if not phone or not message:
@@ -905,6 +884,51 @@ def admin_send():
     send_message(phone, message)
     add_message(phone, "assistant", message)
     return jsonify({"ok": True})
+
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    error = ""
+    if request.method == "POST":
+        pwd = request.form.get("password", "")
+        if pwd == ADMIN_PASSWORD:
+            session["admin_logged"] = True
+            return redirect("/admin")
+        else:
+            error = "Mot de passe incorrect"
+    return f"""<!DOCTYPE html>
+<html><head>
+<title>Auryel Admin</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link href='https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap' rel='stylesheet'>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:'DM Sans',sans-serif;background:#0a0a0f;color:#e8e0d0;min-height:100vh;display:flex;align-items:center;justify-content:center}}
+.bg{{position:fixed;inset:0;background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(212,168,67,0.08) 0%,transparent 70%)}}
+.box{{position:relative;z-index:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:48px 40px;width:100%;max-width:380px;text-align:center}}
+h1{{font-family:'Cormorant Garamond',serif;font-size:32px;color:#d4a843;margin-bottom:6px;letter-spacing:3px}}
+.sub{{color:#8a7a6a;margin-bottom:32px;font-size:13px;letter-spacing:1px}}
+input{{width:100%;background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.12);border-radius:12px;padding:15px 18px;color:#e8e0d0;font-size:16px;outline:none;margin-bottom:14px;font-family:'DM Sans',sans-serif;text-align:center;letter-spacing:3px}}
+input:focus{{border-color:#d4a843;background:rgba(212,168,67,0.06)}}
+button{{width:100%;padding:15px;background:linear-gradient(135deg,#b8860b,#d4a843);border:none;border-radius:12px;color:#0a0a0f;font-size:15px;font-weight:600;cursor:pointer;letter-spacing:1px}}
+button:hover{{opacity:0.9}}
+.error{{color:#ff6b6b;font-size:13px;margin-bottom:12px}}
+</style></head>
+<body><div class='bg'></div>
+<div class='box'>
+<h1>✦ AURYEL</h1>
+<div class='sub'>ESPACE ADMINISTRATEUR</div>
+{'<div class="error">'+error+'</div>' if error else ''}
+<form method='post'>
+<input type='password' name='password' placeholder='••••••••' autofocus>
+<button type='submit'>ACCÉDER</button>
+</form>
+</div></body></html>"""
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.clear()
+    return redirect("/admin/login")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
