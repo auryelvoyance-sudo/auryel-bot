@@ -904,43 +904,43 @@ document.getElementById('sendInput').addEventListener('keydown', function(e) {{
 @app.route("/admin/conversation", methods=["GET"])
 def admin_conversation():
     if not admin_auth():
-        return jsonify({{"error": "unauthorized"}}), 401
+        return jsonify({"error": "unauthorized"}), 401
     phone = request.args.get("phone", "")
     user = get_user(phone)
     messages = get_conversation(phone)
-    return jsonify({{
+    return jsonify({
         "prenom": user["prenom"] if user else phone,
-        "messages": [{{"role": r, "content": c, "timestamp": t}} for r, c, t in messages]
-    }})
+        "messages": [{"role": r, "content": c, "timestamp": t} for r, c, t in messages]
+    })
 
 @app.route("/admin/pause", methods=["POST"])
 def admin_pause():
     if not admin_auth():
-        return jsonify({{"error": "unauthorized"}}), 401
+        return jsonify({"error": "unauthorized"}), 401
     phone = request.args.get("phone", "")
     update_user(phone, etat="pause")
-    return jsonify({{"ok": True}})
+    return jsonify({"ok": True})
 
 @app.route("/admin/resume", methods=["POST"])
 def admin_resume():
     if not admin_auth():
-        return jsonify({{"error": "unauthorized"}}), 401
+        return jsonify({"error": "unauthorized"}), 401
     phone = request.args.get("phone", "")
     update_user(phone, etat="normal")
-    return jsonify({{"ok": True}})
+    return jsonify({"ok": True})
 
 @app.route("/admin/send", methods=["POST"])
 def admin_send():
     if not admin_auth():
-        return jsonify({{"error": "unauthorized"}}), 401
+        return jsonify({"error": "unauthorized"}), 401
     data = request.get_json()
     phone = data.get("phone", "")
     message = data.get("message", "")
     if not phone or not message:
-        return jsonify({{"ok": False}})
+        return jsonify({"ok": False})
     send_message(phone, message)
     add_message(phone, "assistant", message)
-    return jsonify({{"ok": True}})
+    return jsonify({"ok": True})
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
