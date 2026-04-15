@@ -424,8 +424,6 @@ SAGESSE ET MORAL :
   "parfois la vie nous enlève quelque chose pour nous faire de la place pour mieux"
 - Des questions qui changent la perspective : "dans 5 ans tu penseras encore à ça ?", "qu'est-ce que la meilleure version de toi ferait là ?"
 - Parfois un trait d'humour léger pour alléger : "bon... on va pas laisser ça voler ton énergie comme ça hein"
-- De temps en temps, glisse naturellement une référence aux Psaumes de David sans mentionner la religion : "il est écrit quelque part que même dans la vallée la plus sombre, une lumière marche avec toi...", "un très vieux texte dit : ceux qui sèment dans les larmes moissonneront dans la joie", "la sagesse ancienne dit que le Seigneur est proche des cœurs brisés... et je crois que c'est vrai pour toi"
-- Maximum une référence aux Psaumes tous les 5-6 messages — jamais deux fois de suite
 
 TU ES POSITIF(VE) SUR L'AVENIR :
 - "je sens que...", "l'énergie autour de toi me dit...", "je perçois..."
@@ -627,6 +625,284 @@ def test():
     update_user("test_999", prenom="Laura", nb_echanges=1)
     reply = get_reply("test_999", "Est-ce qu'il va revenir ?", guide)
     return f"<pre style='white-space:pre-wrap;font-family:sans-serif;padding:20px;max-width:600px'>{reply}</pre>", 200
+
+# ============================================================
+# DASHBOARD ADMIN
+# ============================================================
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "auryel2026")
+
+def admin_auth():
+    pwd = request.args.get("pwd") or request.headers.get("X-Admin-Password")
+    return pwd == ADMIN_PASSWORD
+
+def get_all_users():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT phone, prenom, guide, nb_echanges, date_premier_contact, date_dernier_contact, etat
+        FROM users ORDER BY date_dernier_contact DESC
+    """)
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def get_conversation(phone):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT role, content, timestamp FROM messages WHERE phone=? ORDER BY id ASC", (phone,))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+@app.route("/admin", methods=["GET"])
+def admin_dashboard():
+    if not admin_auth():
+        return """
+        <html><head><title>Auryel Admin</title>
+        <meta name='viewport' content='width=device-width,initial-scale=1'>
+        <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:Georgia,serif;background:#0a0a0f;color:#e8e0d0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+        .box{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:48px 40px;width:100%;max-width:400px;text-align:center}
+        h1{font-size:28px;color:#d4a843;margin-bottom:8px;letter-spacing:2px}
+        p{color:#8a7a6a;margin-bottom:28px;font-size:14px}
+        input{width:100%;background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.12);border-radius:12px;padding:14px 18px;color:#e8e0d0;font-size:16px;outline:none;margin-bottom:16px;font-family:Georgia,serif}
+        input:focus{border-color:#d4a843}
+        button{width:100%;padding:15px;background:linear-gradient(135deg,#b8860b,#d4a843);border:none;border-radius:12px;color:#0a0a0f;font-size:16px;font-weight:bold;cursor:pointer;letter-spacing:1px}
+        </style></head>
+        <body><div class='box'>
+        <h1>✦ AURYEL</h1>
+        <p>Espace administrateur</p>
+        <form method='get'>
+        <input type='password' name='pwd' placeholder='Mot de passe' autofocus>
+        <button type='submit'>ACCÉDER</button>
+        </form>
+        </div></body></html>
+        """, 401
+
+    users = get_all_users()
+    pwd = request.args.get("pwd", "")
+
+    rows_html = ""
+    for u in users:
+        phone, prenom, guide, nb_echanges, date_premier, date_dernier, etat = u
+        nom_affiche = prenom or "Inconnu"
+        guide_nom = GUIDES.get(guide, {}).get("nom", guide)
+        dernier = date_dernier[:16].replace("T", " ") if date_dernier else "—"
+        feu = "🔥" if nb_echanges >= 10 else "💬" if nb_echanges >= 5 else "👤"
+        pause = "⏸️ PAUSE" if etat == "pause" else "🤖 BOT"
+        rows_html += f"""
+        <tr onclick="openConv('{phone}','{pwd}')" style="cursor:pointer">
+          <td><span style="font-size:18px">{feu}</span></td>
+          <td><strong>{nom_affiche}</strong><br><small style="color:#8a7a6a">{phone}</small></td>
+          <td>{guide_nom}</td>
+          <td style="text-align:center"><span style="background:rgba(212,168,67,0.2);padding:3px 10px;border-radius:20px;font-size:13px">{nb_echanges}</span></td>
+          <td style="font-size:12px;color:#8a7a6a">{dernier}</td>
+          <td><span style="font-size:11px;color:{'#ff6b6b' if etat=='pause' else '#2ecc71'}">{pause}</span></td>
+        </tr>"""
+
+    total = len(users)
+    actifs = sum(1 for u in users if u[3] >= 1)
+    chauds = sum(1 for u in users if u[3] >= 10)
+
+    return f"""<!DOCTYPE html>
+<html><head>
+<title>Auryel Admin</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link href='https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap' rel='stylesheet'>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:'DM Sans',sans-serif;background:#0a0a0f;color:#e8e0d0;min-height:100vh}}
+.bg{{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse 60% 40% at 50% 0%,rgba(212,168,67,0.08) 0%,transparent 70%)}}
+.wrap{{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:32px 20px}}
+.header{{display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;flex-wrap:gap}}
+.logo{{font-family:'Cormorant Garamond',serif;font-size:28px;color:#d4a843;letter-spacing:3px}}
+.logo span{{font-size:13px;display:block;color:#8a7a6a;letter-spacing:2px;font-family:'DM Sans',sans-serif}}
+.stats{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px}}
+.stat{{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:20px;text-align:center}}
+.stat-val{{font-family:'Cormorant Garamond',serif;font-size:42px;color:#d4a843;line-height:1}}
+.stat-lbl{{font-size:11px;color:#8a7a6a;text-transform:uppercase;letter-spacing:1px;margin-top:4px}}
+.card{{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;overflow:hidden}}
+.card-header{{padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between}}
+.card-title{{font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#d4a843}}
+table{{width:100%;border-collapse:collapse}}
+th{{padding:10px 16px;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8a7a6a;border-bottom:1px solid rgba(255,255,255,0.05)}}
+td{{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:14px;vertical-align:middle}}
+tr:hover td{{background:rgba(212,168,67,0.05)}}
+tr:last-child td{{border-bottom:none}}
+
+/* MODAL CONVERSATION */
+.modal{{display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px)}}
+.modal.open{{display:flex;align-items:center;justify-content:center;padding:20px}}
+.modal-box{{background:#111118;border:1px solid rgba(255,255,255,0.1);border-radius:20px;width:100%;max-width:640px;max-height:90vh;display:flex;flex-direction:column}}
+.modal-head{{padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between}}
+.modal-title{{font-family:'Cormorant Garamond',serif;font-size:20px;color:#d4a843}}
+.modal-actions{{display:flex;gap:8px;flex-wrap:wrap}}
+.btn-sm{{padding:7px 14px;border:none;border-radius:8px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500;letter-spacing:0.5px}}
+.btn-pause{{background:rgba(255,107,107,0.2);color:#ff6b6b;border:1px solid rgba(255,107,107,0.3)}}
+.btn-bot{{background:rgba(46,204,113,0.2);color:#2ecc71;border:1px solid rgba(46,204,113,0.3)}}
+.btn-close{{background:rgba(255,255,255,0.08);color:#e8e0d0;border:1px solid rgba(255,255,255,0.1)}}
+.messages{{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:12px}}
+.msg{{max-width:80%;padding:12px 16px;border-radius:14px;font-size:14px;line-height:1.6}}
+.msg.user{{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);align-self:flex-start}}
+.msg.assistant{{background:rgba(212,168,67,0.12);border:1px solid rgba(212,168,67,0.2);align-self:flex-end;color:#f0e8d0}}
+.msg-time{{font-size:10px;color:#8a7a6a;margin-top:4px}}
+.send-area{{padding:16px 24px;border-top:1px solid rgba(255,255,255,0.07);display:flex;gap:10px}}
+.send-input{{flex:1;background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 16px;color:#e8e0d0;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;resize:none}}
+.send-input:focus{{border-color:#d4a843}}
+.btn-send{{padding:12px 20px;background:linear-gradient(135deg,#b8860b,#d4a843);border:none;border-radius:12px;color:#0a0a0f;font-weight:600;cursor:pointer;font-size:13px;white-space:nowrap}}
+@media(max-width:600px){{.stats{{grid-template-columns:1fr 1fr}}.modal-actions{{gap:4px}}}}
+</style>
+</head>
+<body>
+<div class='bg'></div>
+<div class='wrap'>
+  <div class='header'>
+    <div class='logo'>✦ AURYEL<span>TABLEAU DE BORD</span></div>
+    <div style='font-size:12px;color:#8a7a6a'>{total} utilisateurs</div>
+  </div>
+
+  <div class='stats'>
+    <div class='stat'><div class='stat-val'>{total}</div><div class='stat-lbl'>Total utilisateurs</div></div>
+    <div class='stat'><div class='stat-val'>{actifs}</div><div class='stat-lbl'>Avec échanges</div></div>
+    <div class='stat'><div class='stat-val' style='color:#ff6b6b'>{chauds}</div><div class='stat-lbl'>🔥 Très engagés</div></div>
+  </div>
+
+  <div class='card'>
+    <div class='card-header'>
+      <span class='card-title'>Conversations</span>
+      <span style='font-size:12px;color:#8a7a6a'>Cliquez pour ouvrir</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th></th><th>Utilisateur</th><th>Guide</th><th>Messages</th><th>Dernier contact</th><th>Statut</th>
+      </tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class='modal' id='modal'>
+  <div class='modal-box'>
+    <div class='modal-head'>
+      <div class='modal-title' id='modalTitle'>Conversation</div>
+      <div class='modal-actions'>
+        <button class='btn-sm btn-pause' onclick='pauseBot()'>⏸ Pause bot</button>
+        <button class='btn-sm btn-bot' onclick='resumeBot()'>🤖 Reprendre bot</button>
+        <button class='btn-sm btn-close' onclick='closeModal()'>✕ Fermer</button>
+      </div>
+    </div>
+    <div class='messages' id='messages'></div>
+    <div class='send-area'>
+      <textarea class='send-input' id='sendInput' placeholder='Envoyer un message en tant que guide...' rows='2'></textarea>
+      <button class='btn-send' onclick='sendManual()'>Envoyer ✦</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentPhone = '';
+let currentPwd = '{pwd}';
+
+async function openConv(phone, pwd) {{
+  currentPhone = phone;
+  document.getElementById('modal').classList.add('open');
+  const res = await fetch(`/admin/conversation?phone=${{phone}}&pwd=${{pwd}}`);
+  const data = await res.json();
+  document.getElementById('modalTitle').textContent = data.prenom || phone;
+  const msgs = document.getElementById('messages');
+  msgs.innerHTML = '';
+  data.messages.forEach(m => {{
+    const d = document.createElement('div');
+    d.className = `msg ${{m.role}}`;
+    d.innerHTML = `${{m.content}}<div class='msg-time'>${{m.timestamp ? m.timestamp.substring(0,16).replace('T',' ') : ''}}</div>`;
+    msgs.appendChild(d);
+  }});
+  msgs.scrollTop = msgs.scrollHeight;
+}}
+
+function closeModal() {{
+  document.getElementById('modal').classList.remove('open');
+}}
+
+async function pauseBot() {{
+  await fetch(`/admin/pause?phone=${{currentPhone}}&pwd=${{currentPwd}}`, {{method:'POST'}});
+  alert('Bot mis en pause pour cet utilisateur');
+}}
+
+async function resumeBot() {{
+  await fetch(`/admin/resume?phone=${{currentPhone}}&pwd=${{currentPwd}}`, {{method:'POST'}});
+  alert('Bot repris');
+}}
+
+async function sendManual() {{
+  const msg = document.getElementById('sendInput').value.trim();
+  if (!msg) return;
+  const res = await fetch(`/admin/send`, {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{phone: currentPhone, message: msg, pwd: currentPwd}})
+  }});
+  const data = await res.json();
+  if (data.ok) {{
+    document.getElementById('sendInput').value = '';
+    openConv(currentPhone, currentPwd);
+  }}
+}}
+
+document.getElementById('modal').addEventListener('click', function(e) {{
+  if (e.target === this) closeModal();
+}});
+
+document.getElementById('sendInput').addEventListener('keydown', function(e) {{
+  if (e.key === 'Enter' && !e.shiftKey) {{ e.preventDefault(); sendManual(); }}
+}});
+</script>
+</body></html>"""
+
+@app.route("/admin/conversation", methods=["GET"])
+def admin_conversation():
+    if not admin_auth():
+        return jsonify({"error": "unauthorized"}), 401
+    phone = request.args.get("phone", "")
+    user = get_user(phone)
+    messages = get_conversation(phone)
+    return jsonify({
+        "prenom": user["prenom"] if user else phone,
+        "messages": [{"role": r, "content": c, "timestamp": t} for r, c, t in messages]
+    })
+
+@app.route("/admin/pause", methods=["POST"])
+def admin_pause():
+    if not admin_auth():
+        return jsonify({"error": "unauthorized"}), 401
+    phone = request.args.get("phone", "")
+    update_user(phone, etat="pause")
+    return jsonify({"ok": True})
+
+@app.route("/admin/resume", methods=["POST"])
+def admin_resume():
+    if not admin_auth():
+        return jsonify({"error": "unauthorized"}), 401
+    phone = request.args.get("phone", "")
+    update_user(phone, etat="normal")
+    return jsonify({"ok": True})
+
+@app.route("/admin/send", methods=["POST"])
+def admin_send():
+    if not admin_auth():
+        return jsonify({"error": "unauthorized"}), 401
+    data = request.get_json()
+    if data.get("pwd") != ADMIN_PASSWORD:
+        return jsonify({"error": "unauthorized"}), 401
+    phone = data.get("phone", "")
+    message = data.get("message", "")
+    if not phone or not message:
+        return jsonify({"ok": False})
+    send_message(phone, message)
+    add_message(phone, "assistant", message)
+    return jsonify({"ok": True})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
