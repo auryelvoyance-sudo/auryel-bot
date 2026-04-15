@@ -839,15 +839,17 @@ async function resumeBot() {{
 async function sendManual() {{
   const msg = document.getElementById('sendInput').value.trim();
   if (!msg) return;
-  const res = await fetch(`/admin/send`, {{
+  const res = await fetch(`/admin/send?pwd=${{currentPwd}}`, {{
     method: 'POST',
-    headers: {{'Content-Type': 'application/json'}},
+    headers: {{'Content-Type': 'application/json', 'X-Admin-Password': currentPwd}},
     body: JSON.stringify({{phone: currentPhone, message: msg, pwd: currentPwd}})
   }});
   const data = await res.json();
   if (data.ok) {{
     document.getElementById('sendInput').value = '';
     openConv(currentPhone, currentPwd);
+  }} else {{
+    alert('Erreur envoi: ' + JSON.stringify(data));
   }}
 }}
 
