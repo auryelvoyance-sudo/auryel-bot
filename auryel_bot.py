@@ -12,12 +12,12 @@ GROQ_API_KEY    = os.environ.get("GROQ_API_KEY")
 VERIFY_TOKEN    = os.environ.get("VERIFY_TOKEN", "auryel_webhook_2025")
 ADMIN_PASSWORD  = os.environ.get("ADMIN_PASSWORD", "auryel2026")
 DATABASE_URL    = os.environ.get("DATABASE_URL")
-STRIPE_SK       = os.environ.get("STRIPE_SK")
-STRIPE_WEBHOOK = os.environ.get("STRIPE_WEBHOOK_SECRET")
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+STRIPE_SK       = os.environ.get("STRIPE_SK", "sk_test_51TP1XARs93gJ2Bf6SQhqbKyS1sAyng56RbQMno5wL4zEVU3wS2OkiJxbHqDZYxgUularUT34AnDciYoOpfJUeG7S00awwh9UgU")
+STRIPE_WEBHOOK  = os.environ.get("STRIPE_WEBHOOK_SECRET", "whsec_3yGMJn19V1iK3rfgd0GYNnrYf7kE1xqT")
+RESEND_API_KEY  = os.environ.get("RESEND_API_KEY", "re_XK8QvAAr_FcsSnAWH1u1Yt33xjPdbSPgm")
 FROM_EMAIL      = "contact@auryel.com"
 SITE_URL        = "https://auryel-1.netlify.app"
-CRON_SECRET = os.environ.get("CRON_SECRET")
+CRON_SECRET     = os.environ.get("CRON_SECRET", "auryel_cron_2026")
 
 PRICES = {
     "mensuel":    "price_1TP1bbRs93gJ2Bf6zOODCcxn",
@@ -874,10 +874,10 @@ def msg_bienvenue_site(nom_affiche):
 # ============================================================
 # WEBHOOK WHATSAPP
 # ============================================================
-@app.route("/reset-db", methods=["GET", "POST"])
-def reset_database():
-    reset_db()
-    return jsonify({"status":"ok","message":"Base de données remise à zéro"}), 200
+@app.route("/webhook", methods=["GET"])
+def verify():
+    if request.args.get("hub.mode") == "subscribe" and request.args.get("hub.verify_token") == VERIFY_TOKEN:
+        return request.args.get("hub.challenge"), 200
     return "Erreur", 403
 
 @app.route("/webhook", methods=["POST"])
@@ -1029,7 +1029,7 @@ def stripe_webhook():
 # ============================================================
 @app.route("/cron/daily", methods=["GET","POST"])
 def cron_daily():
-    if request.args.get("secret","") != os.environ.get("CRON_SECRET", "auryel_cron_2026"):
+    if request.args.get("secret","") != CRON_SECRET:
         return jsonify({"error":"unauthorized"}), 401
 
     conn = get_conn()
