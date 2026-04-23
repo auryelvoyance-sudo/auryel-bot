@@ -1029,7 +1029,7 @@ def stripe_webhook():
 # ============================================================
 @app.route("/cron/daily", methods=["GET","POST"])
 def cron_daily():
-    if request.args.get("secret","") != CRON_SECRET:
+    if request.args.get("secret","") != os.environ.get("CRON_SECRET", "auryel_cron_2026"):
         return jsonify({"error":"unauthorized"}), 401
 
     conn = get_conn()
