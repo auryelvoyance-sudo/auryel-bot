@@ -874,7 +874,7 @@ def msg_bienvenue_site(nom_affiche):
 # ============================================================
 # WEBHOOK WHATSAPP
 # ============================================================
-@app.route("/webhook", methods=["GET"])
+@app.route("/reset-db", methods=["GET", "POST"])
 def verify():
     if request.args.get("hub.mode") == "subscribe" and request.args.get("hub.verify_token") == VERIFY_TOKEN:
         return request.args.get("hub.challenge"), 200
