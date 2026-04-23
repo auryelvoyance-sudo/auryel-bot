@@ -5,3 +5,5 @@ httpx==0.25.2
 gunicorn==21.2.0
 gevent==23.9.1
 psycopg2-binary==2.9.9
+stripe==7.0.0
+resend==0.7.0
