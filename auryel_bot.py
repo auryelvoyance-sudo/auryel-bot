@@ -875,9 +875,9 @@ def msg_bienvenue_site(nom_affiche):
 # WEBHOOK WHATSAPP
 # ============================================================
 @app.route("/reset-db", methods=["GET", "POST"])
-def verify():
-    if request.args.get("hub.mode") == "subscribe" and request.args.get("hub.verify_token") == VERIFY_TOKEN:
-        return request.args.get("hub.challenge"), 200
+def reset_database():
+    reset_db()
+    return jsonify({"status":"ok","message":"Base de données remise à zéro"}), 200
     return "Erreur", 403
 
 @app.route("/webhook", methods=["POST"])
